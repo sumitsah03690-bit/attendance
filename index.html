@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Face Recognition Attendance System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="auth-container">
+            <div class="logo">
+                <img src="img/logo.png" alt="NITW Logo" id="nitwLogo" style="width: 80px; margin-bottom: 20px;">
+                <h1>Attendance System</h1>
+                <p>National Institute of Technology, Warangal</p>
+            </div>
+
+            <!-- Registration restricted to Admin only -->
+
+            <div id="loginForm" class="form-container active">
+                <h2>Welcome Back</h2>
+                <form onsubmit="handleDemoLogin(event)">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" required placeholder="name@student.nitw.ac.in">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <div class="role-selector" style="margin-bottom: 20px;">
+                        <select id="loginRole" class="btn-secondary"
+                            style="width: 100%; padding: 10px; border-radius: 8px;">
+                            <option value="student">Login as Student</option>
+                            <option value="teacher">Login as Teacher</option>
+                            <option value="admin">Login as Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                    <!-- Removed static admin link, users must login via role selector -->
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

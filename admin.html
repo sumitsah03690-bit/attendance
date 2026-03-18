@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Face Recognition Attendance System</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <img src="img/logo.png" alt="NITW Logo" id="nitwLogo" style="width: 50px;">
+                <h1>Admin Dashboard</h1>
+            </div>
+            <div class="user-info">
+                <span id="adminNameDisplay">Admin Board</span>
+                <a href="index.html" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <!-- Manage Subjects -->
+            <div class="card">
+                <h2><span>📚</span> Manage Subjects</h2>
+                <form id="addSubjectForm" onsubmit="handleAdminAddSubject(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Subject Name</label>
+                            <input type="text" id="newSubjectName" required placeholder="e.g. Design Thinking">
+                        </div>
+                        <div class="form-group">
+                            <label>Subject Code</label>
+                            <input type="text" id="newSubjectCode" required placeholder="e.g. DT101">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Academic Year</label>
+                        <select id="newSubjectYear" required>
+                            <option value="">-- Select Year --</option>
+                            <option value="1">Year 1</option>
+                            <option value="2">Year 2</option>
+                            <option value="3">Year 3</option>
+                            <option value="4">Year 4</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Subject</button>
+                </form>
+            </div>
+
+            <!-- Register Teacher -->
+            <div class="card">
+                <h2><span>👨‍🏫</span> Register Teacher</h2>
+                <form id="adminTeacherForm" onsubmit="handleAdminRegisterTeacher(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" id="adminTeacherName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="adminTeacherEmail" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="adminTeacherPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Assign Initial Subject</label>
+                            <select id="adminTeacherSubject" required>
+                                <option value="">-- Select Subject --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register Teacher</button>
+                </form>
+            </div>
+
+            <!-- Assign Subject to Existing Teacher -->
+            <div class="card">
+                <h2><span>📝</span> Assign Additional Subject</h2>
+                <form id="assignSubjectForm" onsubmit="handleAdminAssignSubject(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Select User (Student or Teacher)</label>
+                            <select id="assignSubjectTeacher" required>
+                                <option value="">-- Select User --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Select Subject</label>
+                            <select id="assignSubjectSelect" required>
+                                <option value="">-- Select Subject --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Assign Subject</button>
+                </form>
+            </div>
+
+            <!-- Register Student -->
+            <div class="card">
+                <h2><span>👤</span> Register Student</h2>
+                <form id="adminStudentForm" onsubmit="handleAdminRegisterStudent(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" id="adminStudentName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Roll Number</label>
+                            <input type="text" id="adminStudentRoll" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="adminStudentEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="adminStudentPassword" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Branch</label>
+                            <input type="text" id="adminStudentBranch" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Year</label>
+                            <select id="adminStudentYear" required>
+                                <option value="">-- Select Year --</option>
+                                <option value="1">Year 1</option>
+                                <option value="2">Year 2</option>
+                                <option value="3">Year 3</option>
+                                <option value="4">Year 4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Assign Teacher</label>
+                            <select id="adminStudentTeacher" required>
+                                <option value="">-- Select Teacher --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Course/Subject</label>
+                            <select id="adminStudentCourse" required>
+                                <option value="">-- Select Course --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Face Capture Section -->
+                    <div class="face-capture-section">
+                        <label style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:0.9rem; font-weight:500;">Capture Student Face (Required)</label>
+                        <div style="position:relative; background:#000; border-radius:12px; overflow:hidden; margin-bottom:12px;">
+                            <video id="adminRegStudentVideo" autoplay muted playsinline style="display:none; margin:0;"></video>
+                            <canvas id="adminRegFaceCanvas" style="display:none; width:100%; border-radius:12px;"></canvas>
+                        </div>
+                        <div class="camera-controls" style="margin-top:0;">
+                            <button type="button" onclick="startAdminFaceCapture()" class="btn btn-success" id="adminStartFaceCamBtn">📷 Start Camera</button>
+                            <button type="button" onclick="captureAdminFace()" class="btn btn-primary" id="adminCaptureFaceBtn" style="display:none;">✅ Capture Face</button>
+                            <button type="button" onclick="stopAdminFaceCapture()" class="btn btn-secondary" id="adminStopFaceCamBtn" style="display:none; background:var(--danger); color:white;">✖ Cancel</button>
+                        </div>
+                        <div id="adminFaceCaptureStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Register Student</button>
+                </form>
+            </div>
+
+
+            <!-- User Management -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2><span>👥</span> User Management</h2>
+                    <div style="display: flex; gap: 12px;">
+                        <select id="filterRole" onchange="renderAdminUsers()" class="btn-secondary" style="padding: 8px;">
+                            <option value="all">All Roles</option>
+                            <option value="teacher">Teachers</option>
+                            <option value="student">Students</option>
+                        </select>
+                        <select id="filterExtra" onchange="renderAdminUsers()" class="btn-secondary" style="padding: 8px;">
+                            <option value="all">All Year/Course</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Role</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Roll/Branch</th>
+                                <th>Info</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersBody">
+                            <!-- Data populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - Face Recognition Attendance System</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Face API Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <img src="img/logo.png" alt="NITW Logo" id="nitwLogo" style="width: 50px;">
+                <h1>Teacher Dashboard</h1>
+            </div>
+            <div class="user-info">
+                <span id="teacherNameDisplay">Teacher Name</span>
+                <a href="index.html" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+
+            <!-- ═══ Take Attendance Section ═══ -->
+            <div class="card">
+                <h2><span>📸</span> Take Attendance (Face Recognition)</h2>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Select Subject</label>
+                        <select id="subjectSelect">
+                            <option value="">-- Select Assigned Subject --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Filter by Year</label>
+                        <select id="attendanceYearFilter">
+                            <option value="all">All Years</option>
+                            <option value="1">Year 1</option>
+                            <option value="2">Year 2</option>
+                            <option value="3">Year 3</option>
+                            <option value="4">Year 4</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- AI Status -->
+                <div id="aiStatus" class="ai-status-bar">
+                    <span>🤖 AI Engine: <strong id="aiStatusText">Not Loaded</strong></span>
+                    <button onclick="loadFaceModels()" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" id="loadModelsBtn">Load AI</button>
+                </div>
+
+                <!-- Camera Preview -->
+                <div class="camera-preview" style="position: relative;">
+                    <video id="teacherVideo" autoplay muted playsinline></video>
+                    <canvas id="overlayCanvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none;"></canvas>
+                </div>
+
+                <!-- Camera Controls -->
+                <div class="camera-controls">
+                    <button onclick="startAttendanceCamera()" class="btn btn-success" id="startCamBtn">Start Camera</button>
+                    <button onclick="captureGroupPhoto()" id="captureBtn" class="btn btn-primary" style="display: none;">📷 Capture & Recognize</button>
+                    <button onclick="stopAttendanceCamera()" class="btn btn-secondary" style="background: var(--danger); color: white;" id="stopCamBtn">Stop Camera</button>
+                </div>
+
+                <!-- OR: Upload Photo -->
+                <div class="upload-section">
+                    <label class="upload-area" id="uploadArea">
+                        <input type="file" id="photoUpload" accept="image/*" onchange="handlePhotoUpload(event)" style="display:none;">
+                        <div class="upload-icon">📁</div>
+                        <p><strong>Upload a Group Photo</strong></p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click or drag & drop an image here</p>
+                    </label>
+                    <img id="uploadedPreview" style="display:none; width:100%; max-height:400px; object-fit:contain; border-radius:12px; margin-top:12px; border:2px solid var(--border);">
+                    <button onclick="recognizeUploadedPhoto()" id="recognizeUploadBtn" class="btn btn-primary" style="display:none; margin-top:12px;">🔍 Recognize Faces in Photo</button>
+                </div>
+
+                <!-- Recognition Results -->
+                <div id="recognitionResults" style="display:none; margin-top:20px;">
+                    <h3 style="margin-bottom:12px; color: var(--success);">✅ Recognition Results</h3>
+                    <div id="faceCountDisplay" style="margin-bottom:12px; font-weight:600;"></div>
+                    <div id="matchedStudentsList"></div>
+                    <button onclick="saveRecognizedAttendance()" class="btn btn-success" style="margin-top:16px; width:100%;">💾 Save Attendance</button>
+                </div>
+            </div>
+
+            <!-- ═══ Register Student with Face ═══ -->
+            <div class="card">
+                <h2><span>👤</span> Register New Student</h2>
+                <form onsubmit="handleRegisterStudent(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="newStudentName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Roll Number</label>
+                            <input type="text" id="newStudentRoll" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="newStudentEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="newStudentPassword" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Branch</label>
+                            <input type="text" id="newStudentBranch" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Year</label>
+                            <select id="newStudentYear" required>
+                                <option value="">-- Select Year --</option>
+                                <option value="1">Year 1</option>
+                                <option value="2">Year 2</option>
+                                <option value="3">Year 3</option>
+                                <option value="4">Year 4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Subject/Course</label>
+                        <select id="newStudentCourse" required>
+                            <option value="">-- Select Course --</option>
+                        </select>
+                    </div>
+
+                    <!-- Face Capture Section -->
+                    <div class="face-capture-section">
+                        <label style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:0.9rem; font-weight:500;">Capture Student Face (Required)</label>
+                        <div style="position:relative; background:#000; border-radius:12px; overflow:hidden; margin-bottom:12px;">
+                            <video id="regStudentVideo" autoplay muted playsinline style="display:none; margin:0;"></video>
+                            <canvas id="regFaceCanvas" style="display:none; width:100%; border-radius:12px;"></canvas>
+                        </div>
+                        <div class="camera-controls" style="margin-top:0;">
+                            <button type="button" onclick="startFaceCapture()" class="btn btn-success" id="startFaceCamBtn">📷 Start Camera</button>
+                            <button type="button" onclick="captureFace()" class="btn btn-primary" id="captureFaceBtn" style="display:none;">✅ Capture Face</button>
+                            <button type="button" onclick="stopFaceCapture()" class="btn btn-secondary" id="stopFaceCamBtn" style="display:none; background:var(--danger); color:white;">✖ Cancel</button>
+                        </div>
+                        <div id="faceCaptureStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="margin-top:16px;">Register Student</button>
+                </form>
+            </div>
+
+            <!-- ═══ Download Reports Section ═══ -->
+            <div class="card">
+                <h2><span>📊</span> Attendance Reports</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">Download comprehensive attendance history for your assigned subjects.</p>
+                
+                <div class="form-row" style="align-items: flex-end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Filter by Subject</label>
+                        <select id="reportSubjectFilter">
+                            <option value="all">All Assigned Subjects</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button onclick="downloadTeacherReport()" class="btn-primary" style="height: 48px;">
+                            <span>📥</span> Download Excel Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Student List ═══ -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2><span>📋</span> Registered Students</h2>
+                    <div style="display: flex; gap: 12px;">
+                        <select id="filterStudentYear" onchange="renderTeacherStudents()" class="btn-secondary"
+                            style="padding: 8px;">
+                            <option value="all">All Years</option>
+                            <option value="1">First Year</option>
+                            <option value="2">Second Year</option>
+                            <option value="3">Third Year</option>
+                            <option value="4">Fourth Year</option>
+                        </select>
+                        <select id="filterStudentCourse" onchange="renderTeacherStudents()" class="btn-secondary"
+                            style="padding: 8px;">
+                            <option value="all">All Courses</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Roll Number</th>
+                                <th>Branch</th>
+                                <th>Year</th>
+                                <th>Subject</th>
+                                <th>Face</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teacherStudentsBody">
+                            <!-- Data populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

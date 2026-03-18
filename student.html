@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Face Recognition Attendance System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <img src="img/logo.png" alt="NITW Logo" id="nitwLogo" style="width: 50px;">
+                <h1>Student Dashboard</h1>
+            </div>
+            <div class="user-info">
+                <span id="studentNameDisplay">Student Name</span>
+                <a href="index.html" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <!-- Top Stats Section -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Overall Attendance</h3>
+                    <div id="overallAttendanceValue" class="value">0%</div>
+                    <div id="attendanceTargetStatus" class="percentage" style="font-weight: 600;">--</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Classes</h3>
+                    <div id="totalClassesValue" class="value">0</div>
+                    <div class="percentage">Present & Absent</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Enrolled Subjects</h3>
+                    <div id="studentSubjectsList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                        <!-- Badges populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                <!-- Attendance Detailed Table -->
+                <div class="card">
+                    <h2><span style="font-size: 1.5rem;">📊</span> Attendance History</h2>
+                    <div class="table-responsive" style="margin-top: 10px;">
+                        <table style="width: 100%; text-align: left;">
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentAttendanceBody">
+                                <!-- Attendance rows populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Records Side Panel -->
+                <div class="card">
+                    <h2><span style="font-size: 1.5rem;">🕒</span> Recent Activity</h2>
+                    <div id="studentRecentRecords" style="margin-top: 10px;">
+                        <!-- Recent records populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
