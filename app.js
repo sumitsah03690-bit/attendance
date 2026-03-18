@@ -20,20 +20,53 @@ async function downloadTeacherReport() {
             return showNotification('No attendance records found for the selected filter.', true);
         }
 
-        // Format for Excel
-        const excelRows = data.map(r => ({
+        // Sheet 1: Detailed (existing format)
+        const detailedRows = data.map(r => ({
             'Student Name': r.student_name || 'N/A',
             'Roll Number': r.roll || 'N/A',
             'Email': r.student_email,
             'Subject': r.subject,
-            'Status': r.status.toUpperCase(),
+            'Status': r.status === 'present' ? 1 : 0,
             'Date': r.date,
             'Time': r.time
         }));
 
+        // Sheet 2: Register (matrix format)
+        // Get unique students and dates
+        const studentMap = {};
+        const dateSet = new Set();
+
+        data.forEach(r => {
+            const key = r.student_email;
+            if (!studentMap[key]) {
+                studentMap[key] = { name: r.student_name || 'N/A', roll: r.roll || 'N/A', dates: {} };
+            }
+            dateSet.add(r.date);
+            if (r.status === 'present') {
+                studentMap[key].dates[r.date] = 1;
+            }
+        });
+
+        const sortedDates = Array.from(dateSet).sort();
+        const registerRows = [];
+
+        Object.values(studentMap).forEach(student => {
+            const row = { 'Student Name': student.name, 'Roll Number': student.roll };
+            let totalPresent = 0;
+            sortedDates.forEach(date => {
+                const val = student.dates[date] ? 1 : 0;
+                row[date] = val;
+                totalPresent += val;
+            });
+            row['Total Present'] = totalPresent;
+            row['Total Classes'] = sortedDates.length;
+            row['Percentage'] = sortedDates.length > 0 ? ((totalPresent / sortedDates.length) * 100).toFixed(1) + '%' : '0%';
+            registerRows.push(row);
+        });
+
         const filename = `Attendance_Report_${filterSubject === 'all' ? 'All_Subjects' : filterSubject.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        generateExcel(excelRows, filename);
-        showNotification('Report downloaded successfully!');
+        generateExcel(detailedRows, filename, registerRows);
+        showNotification('Report downloaded with Detailed + Register sheets!');
 
     } catch (err) {
         console.error('Report fetch failed:', err);
@@ -709,24 +742,28 @@ async function saveRecognizedAttendance() {
 }
 
 // ── Excel Export (SheetJS) ──────────────────────────────────────
-function generateExcel(rows, subject) {
+function generateExcel(rows, filename, registerRows) {
     if (!rows.length) return;
-    // Use SheetJS loaded from CDN
     if (typeof XLSX === 'undefined') {
         showNotification('Excel library not loaded. Download manually.', true);
         return;
     }
-    const ws = XLSX.utils.json_to_sheet(rows);
-    // Set column widths
-    ws['!cols'] = [
-        {wch: 20}, {wch: 15}, {wch: 25}, {wch: 8}, {wch: 25}, {wch: 10}, {wch: 12}, {wch: 12}
-    ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-    const dateStr = new Date().toISOString().split('T')[0];
-    const safeName = subject.replace(/[^a-zA-Z0-9]/g, '_');
-    XLSX.writeFile(wb, `Attendance_${safeName}_${dateStr}.xlsx`);
-    showNotification('Excel sheet downloaded!');
+
+    // Sheet 1: Detailed
+    const ws1 = XLSX.utils.json_to_sheet(rows);
+    ws1['!cols'] = [
+        {wch: 20}, {wch: 15}, {wch: 25}, {wch: 25}, {wch: 8}, {wch: 12}, {wch: 10}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Detailed');
+
+    // Sheet 2: Register (if provided)
+    if (registerRows && registerRows.length) {
+        const ws2 = XLSX.utils.json_to_sheet(registerRows);
+        XLSX.utils.book_append_sheet(wb, ws2, 'Register');
+    }
+
+    XLSX.writeFile(wb, filename);
 }
 
 // ── Student List (Teacher) ──────────────────────────────────────
@@ -786,7 +823,13 @@ function renderTeacherStudents() {
 
 async function handleAdminAddSubject(e) {
     e.preventDefault();
-    const d = { name: document.getElementById('newSubjectName').value, code: document.getElementById('newSubjectCode').value, year: document.getElementById('newSubjectYear').value };
+    const branches = Array.from(document.querySelectorAll('.branch-check:checked')).map(c => c.value);
+    const d = {
+        name: document.getElementById('newSubjectName').value,
+        code: document.getElementById('newSubjectCode').value,
+        year: document.getElementById('newSubjectYear').value,
+        branches: branches
+    };
     try {
         const data = await api.post('/api/subjects', d);
         if (data.success) { showNotification(data.message); e.target.reset(); fetchSubjects(); }

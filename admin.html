@@ -50,6 +50,19 @@
                             <option value="4">Year 4</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label>Applicable Branches</label>
+                        <div id="branchCheckboxes" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:6px;">
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="CS" class="branch-check"> CS</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="CS AI DS" class="branch-check"> CS AI DS</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="ECE" class="branch-check"> ECE</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="ECE VLSI" class="branch-check"> ECE VLSI</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="Civil" class="branch-check"> Civil</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="Mech" class="branch-check"> Mech</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="MME" class="branch-check"> MME</label>
+                            <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;"><input type="checkbox" value="Chem" class="branch-check"> Chem</label>
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Add Subject</button>
                 </form>
             </div>
@@ -133,7 +146,17 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Branch</label>
-                            <input type="text" id="adminStudentBranch" required>
+                            <select id="adminStudentBranch" required>
+                                <option value="">-- Select Branch --</option>
+                                <option value="CS">CS</option>
+                                <option value="CS AI DS">CS AI DS</option>
+                                <option value="ECE">ECE</option>
+                                <option value="ECE VLSI">ECE VLSI</option>
+                                <option value="Civil">Civil</option>
+                                <option value="Mech">Mech</option>
+                                <option value="MME">MME</option>
+                                <option value="Chem">Chem</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>Year</label>

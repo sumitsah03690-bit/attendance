@@ -948,3 +948,72 @@ a {
     background-position: -200% 0;
   }
 }
+
+/* ── Checkbox Bounce ───────────────────────────────────────── */
+input[type="checkbox"] {
+    transition: transform 0.15s ease;
+}
+
+input[type="checkbox"]:checked {
+    animation: checkBounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes checkBounce {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+/* ── Select Focus Grow ─────────────────────────────────────── */
+select:focus {
+    transition: all 0.2s ease;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+/* ── Logo Subtle Pulse ─────────────────────────────────────── */
+#nitwLogo {
+    transition: transform 0.3s ease;
+}
+
+#nitwLogo:hover {
+    transform: scale(1.1) rotate(-5deg);
+}
+
+/* ── Camera Controls Fade ──────────────────────────────────── */
+.camera-controls button {
+    transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Branch Checkbox Label Hover ───────────────────────────── */
+.branch-check + span,
+#branchCheckboxes label {
+    transition: background 0.2s ease, transform 0.15s ease;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+#branchCheckboxes label:hover {
+    background: rgba(99, 102, 241, 0.08);
+    transform: translateY(-1px);
+}
+
+/* ── Stats Grid Count Up Feel ──────────────────────────────── */
+.stat-card .value {
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover .value {
+    transform: scale(1.05);
+}
+
+/* ── Upload Preview Slide In ───────────────────────────────── */
+#uploadedPreview,
+#adminFaceUploadPreview {
+    animation: previewSlide 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes previewSlide {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}

@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { name, code, year } = req.body || {};
+    const { name, code, year, branches } = req.body || {};
 
     if (!name || !code || !year) {
       return res.status(400).json({ success: false, message: 'Subject Name, Code and Year are required.' });
@@ -24,6 +24,7 @@ module.exports = async function handler(req, res) {
         name,
         code,
         year: parseInt(year),
+        branches: branches || [],
         created_at: new Date()
       });
 
