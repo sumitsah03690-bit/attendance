@@ -70,9 +70,12 @@
                 <!-- Camera Controls -->
                 <div class="camera-controls">
                     <button onclick="startAttendanceCamera()" class="btn btn-success" id="startCamBtn">Start Camera</button>
-                    <button onclick="captureGroupPhoto()" id="captureBtn" class="btn btn-primary" style="display: none;">📷 Capture & Recognize</button>
-                    <button onclick="stopAttendanceCamera()" class="btn btn-secondary" style="background: var(--danger); color: white;" id="stopCamBtn">Stop Camera</button>
+                    <button onclick="flipCamera()" id="flipCamBtn" class="btn btn-secondary" style="display: none;">🔄 Flip Camera</button>
+                    <button onclick="captureGroupPhoto()" id="captureBtn" class="btn btn-primary" style="display: none;">📷 Capture</button>
+                    <button onclick="finishCameraCaptures()" id="doneCapturingBtn" class="btn btn-success" style="display: none;">✅ Done — Show Results</button>
+                    <button onclick="stopAttendanceCamera()" class="btn btn-secondary" style="background: var(--danger); color: white;" id="stopCamBtn">✖ Cancel</button>
                 </div>
+                <div id="captureCountDisplay" style="margin-top:8px; font-size:0.9rem; color:var(--text-secondary);"></div>
 
                 <!-- OR: Upload Photo -->
                 <div class="upload-section">

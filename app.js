@@ -186,10 +186,15 @@ async function extractAllDescriptors(inputElement) {
 // ── Camera Helpers ──────────────────────────────────────────────
 let currentStream = null;
 
-async function openCamera(videoId) {
+async function openCamera(videoId, facingMode) {
     const video = document.getElementById(videoId);
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        const constraints = {
+            video: facingMode
+                ? { facingMode: { ideal: facingMode }, width: 640, height: 480 }
+                : { width: 640, height: 480 }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         video.style.display = 'block';
         currentStream = stream;
@@ -198,6 +203,15 @@ async function openCamera(videoId) {
         showNotification('Camera access denied.', true);
         return false;
     }
+}
+
+let cameraFacing = 'environment'; // default: back camera
+
+async function flipCamera() {
+    cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+    closeCamera('teacherVideo');
+    const ok = await openCamera('teacherVideo', cameraFacing);
+    if (ok) showNotification(`📷 Switched to ${cameraFacing === 'user' ? 'front' : 'back'} camera`);
 }
 
 function closeCamera(videoId) {
@@ -456,6 +470,8 @@ async function handleAdminRegisterStudent(e) {
 // ══════════════════════════════════════════════════════════════════
 
 let recognizedStudents = []; // [{email, name, distance}]
+let cameraDetections = []; // accumulated detections from multiple captures
+let captureCount = 0;
 
 async function startAttendanceCamera() {
     const subject = document.getElementById('subjectSelect').value;
@@ -464,9 +480,17 @@ async function startAttendanceCamera() {
     const loaded = await loadFaceModels();
     if (!loaded) return;
 
-    const ok = await openCamera('teacherVideo');
+    // Reset accumulated captures
+    cameraDetections = [];
+    captureCount = 0;
+    const countEl = document.getElementById('captureCountDisplay');
+    if (countEl) countEl.textContent = '';
+
+    const ok = await openCamera('teacherVideo', cameraFacing);
     if (ok) {
         document.getElementById('captureBtn').style.display = 'inline-flex';
+        document.getElementById('flipCamBtn').style.display = 'inline-flex';
+        document.getElementById('doneCapturingBtn').style.display = 'inline-flex';
         document.getElementById('recognitionResults').style.display = 'none';
     }
 }
@@ -477,7 +501,8 @@ async function captureGroupPhoto() {
         return showNotification('Camera not ready.', true);
     }
 
-    showNotification('🔄 Scanning faces... please wait.');
+    captureCount++;
+    showNotification(`🔄 Scanning capture #${captureCount}... please wait.`);
 
     // Capture frame to canvas for processing
     const canvas = document.createElement('canvas');
@@ -485,12 +510,47 @@ async function captureGroupPhoto() {
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
 
-    await recognizeFacesFromElement(canvas);
+    // Accumulate results (don't display yet — camera stays open)
+    const detections = await recognizeFacesFromElement(canvas, true);
+    if (detections && detections.length) {
+        cameraDetections.push(...detections);
+    }
+
+    // Update capture count display
+    const countEl = document.getElementById('captureCountDisplay');
+    if (countEl) {
+        const uniqueEmails = new Set(cameraDetections.map(d => d.email));
+        countEl.innerHTML = `📸 <strong>${captureCount}</strong> capture(s) — <strong style="color:var(--success)">${uniqueEmails.size}</strong> unique student(s) found`;
+    }
+
+    showNotification(`✅ Capture #${captureCount} done! Take more or press "Done".`);
+}
+
+function finishCameraCaptures() {
+    closeCamera('teacherVideo');
+    document.getElementById('captureBtn').style.display = 'none';
+    document.getElementById('flipCamBtn').style.display = 'none';
+    document.getElementById('doneCapturingBtn').style.display = 'none';
+
+    if (cameraDetections.length === 0) {
+        showNotification('No faces detected in any capture.', true);
+        return;
+    }
+
+    displayAccumulatedResults(cameraDetections);
 }
 
 function stopAttendanceCamera() {
     closeCamera('teacherVideo');
     document.getElementById('captureBtn').style.display = 'none';
+    const flipBtn = document.getElementById('flipCamBtn');
+    if (flipBtn) flipBtn.style.display = 'none';
+    const doneBtn = document.getElementById('doneCapturingBtn');
+    if (doneBtn) doneBtn.style.display = 'none';
+    cameraDetections = [];
+    captureCount = 0;
+    const countEl = document.getElementById('captureCountDisplay');
+    if (countEl) countEl.textContent = '';
 }
 
 // Photo Upload (supports multiple images for 80+ student scanning)
