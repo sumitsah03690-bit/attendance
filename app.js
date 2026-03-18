@@ -298,6 +298,52 @@ function stopAdminFaceCapture() {
     if (canvas) canvas.style.display = 'none';
 }
 
+// Upload face photo instead of camera capture (Admin)
+async function handleAdminFaceUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('adminFaceCaptureStatus');
+    statusEl.textContent = '🔄 Analyzing uploaded photo...';
+    statusEl.style.color = 'var(--warning)';
+
+    // Show preview
+    const preview = document.getElementById('adminFaceUploadPreview');
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+
+        // Hide camera canvas if visible
+        const canvas = document.getElementById('adminRegFaceCanvas');
+        if (canvas) canvas.style.display = 'none';
+
+        // Load face models if needed
+        const loaded = await loadFaceModels();
+        if (!loaded) {
+            statusEl.textContent = '❌ Failed to load AI models.';
+            statusEl.style.color = 'var(--danger)';
+            return;
+        }
+
+        // Extract face descriptor from uploaded image
+        const img = new Image();
+        img.onload = async () => {
+            const descriptor = await extractDescriptor(img);
+            if (!descriptor) {
+                statusEl.textContent = '❌ No face detected in the photo. Please try a clearer photo.';
+                statusEl.style.color = 'var(--danger)';
+                return;
+            }
+            adminCapturedFaceDescriptor = descriptor;
+            statusEl.textContent = '✅ Face detected from uploaded photo!';
+            statusEl.style.color = 'var(--success)';
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
 // ── Student Registration (Teacher) ──────────────────────────────
 async function handleRegisterStudent(e) {
     e.preventDefault();

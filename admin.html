@@ -173,6 +173,12 @@
                             <button type="button" onclick="captureAdminFace()" class="btn btn-primary" id="adminCaptureFaceBtn" style="display:none;">✅ Capture Face</button>
                             <button type="button" onclick="stopAdminFaceCapture()" class="btn btn-secondary" id="adminStopFaceCamBtn" style="display:none; background:var(--danger); color:white;">✖ Cancel</button>
                         </div>
+                        <div style="text-align:center; color:var(--text-secondary); font-size:0.8rem; margin:8px 0;">— OR upload a photo —</div>
+                        <label class="btn btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:0.85rem;">
+                            📁 Upload Face Photo
+                            <input type="file" accept="image/*" onchange="handleAdminFaceUpload(event)" style="display:none;">
+                        </label>
+                        <img id="adminFaceUploadPreview" style="display:none; width:100%; max-height:200px; object-fit:contain; border-radius:8px; margin-top:8px; border:1px solid var(--border);">
                         <div id="adminFaceCaptureStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);"></div>
                     </div>
 
