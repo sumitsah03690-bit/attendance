@@ -315,7 +315,7 @@ async function handleRegisterStudent(e) {
     }
 
     try {
-        const data = await api.post('/api/register-student', d);
+        const data = await api.post('/api/register', d);
         if (data.success) {
             showNotification(data.message);
 
@@ -354,7 +354,7 @@ async function handleAdminRegisterStudent(e) {
     }
 
     try {
-        const data = await api.post('/api/register-student', d);
+        const data = await api.post('/api/register', d);
         if (data.success) {
             showNotification(data.message);
 
@@ -584,7 +584,7 @@ async function saveRecognizedAttendance() {
     if (records.length === 0) return showNotification('No students selected.', true);
 
     try {
-        const data = await api.post('/api/attendance/bulk', { records, subject });
+        const data = await api.post('/api/attendance', { records, subject });
         if (data.success) {
             showNotification(data.message);
 
