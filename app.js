@@ -538,6 +538,9 @@ function finishCameraCaptures() {
     }
 
     displayAccumulatedResults(cameraDetections);
+
+    // Auto-save attendance after showing results
+    setTimeout(() => saveRecognizedAttendance(), 500);
 }
 
 function stopAttendanceCamera() {
