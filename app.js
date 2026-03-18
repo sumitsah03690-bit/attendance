@@ -414,18 +414,25 @@ function stopAttendanceCamera() {
     document.getElementById('captureBtn').style.display = 'none';
 }
 
-// Photo Upload
+// Photo Upload (supports multiple images for 80+ student scanning)
+let uploadedImageFiles = [];
+
 function handlePhotoUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files);
+    if (!files.length) return;
+    uploadedImageFiles = files;
+
+    // Show preview of first image
     const reader = new FileReader();
     reader.onload = function(e) {
         const preview = document.getElementById('uploadedPreview');
         preview.src = e.target.result;
         preview.style.display = 'block';
         document.getElementById('recognizeUploadBtn').style.display = 'inline-flex';
+        document.getElementById('recognizeUploadBtn').textContent =
+            files.length > 1 ? `🔍 Recognize Faces in ${files.length} Photos` : '🔍 Recognize Faces in Photo';
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(files[0]);
 }
 
 async function recognizeUploadedPhoto() {
@@ -435,19 +442,41 @@ async function recognizeUploadedPhoto() {
     const loaded = await loadFaceModels();
     if (!loaded) return;
 
-    const img = document.getElementById('uploadedPreview');
-    showNotification('🔄 Scanning uploaded photo... please wait.');
-    await recognizeFacesFromElement(img);
+    if (!uploadedImageFiles.length) return showNotification('No photos selected.', true);
+
+    // Process all uploaded images and accumulate results
+    const allDetections = [];
+    for (let i = 0; i < uploadedImageFiles.length; i++) {
+        showNotification(`🔄 Scanning photo ${i + 1} of ${uploadedImageFiles.length}...`);
+        const img = await loadImageFromFile(uploadedImageFiles[i]);
+        const detections = await recognizeFacesFromElement(img, true); // true = return results, don't display yet
+        if (detections) allDetections.push(...detections);
+    }
+
+    // Now display accumulated results with deduplication
+    displayAccumulatedResults(allDetections);
+}
+
+function loadImageFromFile(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 // Core Recognition Logic
-async function recognizeFacesFromElement(element) {
+async function recognizeFacesFromElement(element, returnOnly = false) {
     try {
         // Get all stored face descriptors
         const faceDataResp = await api.get('/api/face-data');
         if (!faceDataResp.success || !faceDataResp.face_data.length) {
             showNotification('No registered faces found. Please register students first.', true);
-            return;
+            return returnOnly ? [] : undefined;
         }
 
         // Build labeled face descriptors
@@ -462,15 +491,15 @@ async function recognizeFacesFromElement(element) {
 
         // Detect all faces in the image/canvas
         const detections = await faceapi
-            .detectAllFaces(element, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+            .detectAllFaces(element, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
             .withFaceLandmarks()
             .withFaceDescriptors();
 
         const totalFaces = detections.length;
 
         if (totalFaces === 0) {
-            showNotification('No faces detected in the image.', true);
-            return;
+            if (!returnOnly) showNotification('No faces detected in the image.', true);
+            return returnOnly ? [] : undefined;
         }
 
         // Match each detected face
@@ -491,7 +520,6 @@ async function recognizeFacesFromElement(element) {
                     if (yearFilter !== 'all' && String(student.year) !== String(yearFilter)) return;
                     
                     // 2. Apply enrollment filter
-                    // student.course can be a comma-separated string of "Subject Name (Code)"
                     const enrolledCourses = student.course ? student.course.split(',').map(c => c.trim().toLowerCase()) : [];
                     const isEnrolled = enrolledCourses.some(c => c === selectedSubject.toLowerCase());
                     
@@ -512,7 +540,12 @@ async function recognizeFacesFromElement(element) {
             }
         });
 
-        // DE-DUPLICATION: Keep only the best match (lowest distance) for each student email
+        // If returnOnly, return raw matches for accumulation (multi-photo mode)
+        if (returnOnly) {
+            return tempRecognized;
+        }
+
+        // Single-photo mode: deduplicate and display immediately
         const uniqueMap = new Map();
         tempRecognized.forEach(s => {
             if (!uniqueMap.has(s.email) || s.distance < uniqueMap.get(s.email).distance) {
@@ -527,17 +560,47 @@ async function recognizeFacesFromElement(element) {
         });
 
         // Show results
-        const resultsDiv = document.getElementById('recognitionResults');
-        const countDiv = document.getElementById('faceCountDisplay');
-        const listDiv = document.getElementById('matchedStudentsList');
+        displayRecognitionUI(totalFaces);
 
-        countDiv.innerHTML = `Detected <strong>${totalFaces}</strong> face(s) | Matched <strong style="color:var(--success)">${recognizedStudents.length}</strong> student(s)`;
+    } catch (err) {
+        console.error('Recognition error:', err);
+        showNotification('Error during face recognition.', true);
+        return returnOnly ? [] : undefined;
+    }
+}
 
-        if (recognizedStudents.length === 0) {
-            listDiv.innerHTML = '<p style="color: var(--text-secondary);">No registered students matched. They may not have face data registered.</p>';
-        } else {
-            listDiv.innerHTML = recognizedStudents.map((s, i) => `
-                <div class="matched-student-row">
+// Display accumulated results from multi-photo scanning
+function displayAccumulatedResults(allMatches) {
+    // Deduplicate: keep best match (lowest distance) per student
+    const uniqueMap = new Map();
+    allMatches.forEach(s => {
+        if (!uniqueMap.has(s.email) || s.distance < uniqueMap.get(s.email).distance) {
+            uniqueMap.set(s.email, s);
+        }
+    });
+    recognizedStudents = Array.from(uniqueMap.values());
+
+    recognizedStudents.forEach(s => {
+        s.confidence = ((1 - s.distance) * 100).toFixed(1);
+    });
+
+    displayRecognitionUI(allMatches.length);
+    showNotification(`✅ Scanned all photos! Found ${recognizedStudents.length} unique student(s).`);
+}
+
+// Shared UI rendering for recognition results
+function displayRecognitionUI(totalFaces) {
+    const resultsDiv = document.getElementById('recognitionResults');
+    const countDiv = document.getElementById('faceCountDisplay');
+    const listDiv = document.getElementById('matchedStudentsList');
+
+    countDiv.innerHTML = `Detected <strong>${totalFaces}</strong> face(s) | Matched <strong style="color:var(--success)">${recognizedStudents.length}</strong> unique student(s)`;
+
+    if (recognizedStudents.length === 0) {
+        listDiv.innerHTML = '<p style="color: var(--text-secondary);">No registered students matched. They may not have face data registered.</p>';
+    } else {
+        listDiv.innerHTML = recognizedStudents.map((s, i) => `
+                <div class="matched-student-row" style="animation-delay: ${i * 0.05}s">
                     <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
                         <input type="checkbox" checked data-index="${i}" class="attendance-check" style="width:18px; height:18px; accent-color:var(--success);">
                         <div>
@@ -547,15 +610,10 @@ async function recognizeFacesFromElement(element) {
                     </label>
                 </div>
             `).join('');
-        }
-
-        resultsDiv.style.display = 'block';
-        showNotification(`Recognized ${recognizedStudents.length} student(s) out of ${totalFaces} face(s)!`);
-
-    } catch (err) {
-        console.error('Recognition error:', err);
-        showNotification('Error during face recognition.', true);
     }
+
+    resultsDiv.style.display = 'block';
+    showNotification(`Recognized ${recognizedStudents.length} student(s) out of ${totalFaces} face(s)!`);
 }
 
 async function saveRecognizedAttendance() {

@@ -4,6 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/img/icon-192.png">
     <title>Teacher Dashboard - Face Recognition Attendance System</title>
     <link rel="stylesheet" href="style.css">
     <!-- Face API Library -->
@@ -72,10 +77,10 @@
                 <!-- OR: Upload Photo -->
                 <div class="upload-section">
                     <label class="upload-area" id="uploadArea">
-                        <input type="file" id="photoUpload" accept="image/*" onchange="handlePhotoUpload(event)" style="display:none;">
+                        <input type="file" id="photoUpload" accept="image/*" multiple onchange="handlePhotoUpload(event)" style="display:none;">
                         <div class="upload-icon">📁</div>
-                        <p><strong>Upload a Group Photo</strong></p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click or drag & drop an image here</p>
+                        <p><strong>Upload Group Photos</strong></p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Select multiple photos to scan up to 80+ students</p>
                     </label>
                     <img id="uploadedPreview" style="display:none; width:100%; max-height:400px; object-fit:contain; border-radius:12px; margin-top:12px; border:2px solid var(--border);">
                     <button onclick="recognizeUploadedPhoto()" id="recognizeUploadBtn" class="btn btn-primary" style="display:none; margin-top:12px;">🔍 Recognize Faces in Photo</button>
@@ -216,6 +221,7 @@
         </div>
     </div>
     <script src="app.js"></script>
+    <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
 </body>
 
 </html>
