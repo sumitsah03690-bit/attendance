@@ -32,7 +32,6 @@ async function downloadTeacherReport() {
         }));
 
         // Sheet 2: Register (matrix format)
-        // Get unique students and dates
         const studentMap = {};
         const dateSet = new Set();
 
@@ -50,8 +49,15 @@ async function downloadTeacherReport() {
         const sortedDates = Array.from(dateSet).sort();
         const registerRows = [];
 
-        Object.values(studentMap).forEach(student => {
-            const row = { 'Student Name': student.name, 'Roll Number': student.roll };
+        // Sort students by roll number
+        const sortedStudents = Object.values(studentMap).sort((a, b) => {
+            const rollA = a.roll || '';
+            const rollB = b.roll || '';
+            return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        sortedStudents.forEach((student, idx) => {
+            const row = { 'S.No': idx + 1, 'Student Name': student.name, 'Roll Number': student.roll };
             let totalPresent = 0;
             sortedDates.forEach(date => {
                 const val = student.dates[date] ? 1 : 0;
@@ -64,7 +70,23 @@ async function downloadTeacherReport() {
             registerRows.push(row);
         });
 
-        const filename = `Attendance_Report_${filterSubject === 'all' ? 'All_Subjects' : filterSubject.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        // Add summary row at the bottom
+        if (registerRows.length > 0) {
+            const summaryRow = { 'S.No': '', 'Student Name': 'SUMMARY', 'Roll Number': '' };
+            sortedDates.forEach(date => {
+                const col = registerRows.reduce((sum, r) => sum + (r[date] || 0), 0);
+                summaryRow[date] = col;
+            });
+            const totalPresAll = registerRows.reduce((s, r) => s + r['Total Present'], 0);
+            const classesAll = registerRows.reduce((s, r) => s + r['Total Classes'], 0);
+            summaryRow['Total Present'] = totalPresAll;
+            summaryRow['Total Classes'] = classesAll;
+            summaryRow['Percentage'] = classesAll > 0 ? ((totalPresAll / classesAll) * 100).toFixed(1) + '% (avg)' : '0%';
+            registerRows.push(summaryRow);
+        }
+
+        const teacherName = (user.name || 'Teacher').replace(/\s+/g, '_');
+        const filename = `Attendance_${teacherName}_${filterSubject === 'all' ? 'All_Subjects' : filterSubject.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
         generateExcel(detailedRows, filename, registerRows);
         showNotification('Report downloaded with Detailed + Register sheets!');
 
@@ -164,11 +186,22 @@ async function extractDescriptor(inputElement) {
         if (!loaded) return null;
     }
     const detection = await faceapi
-        .detectSingleFace(inputElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .detectSingleFace(inputElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
     if (!detection) return null;
     return Array.from(detection.descriptor);
+}
+
+// Average multiple descriptors into one robust descriptor
+function averageDescriptors(descriptorArrays) {
+    if (!descriptorArrays.length) return null;
+    if (descriptorArrays.length === 1) return descriptorArrays[0];
+    const len = descriptorArrays[0].length;
+    const avg = new Array(len).fill(0);
+    descriptorArrays.forEach(d => { for (let i = 0; i < len; i++) avg[i] += d[i]; });
+    for (let i = 0; i < len; i++) avg[i] /= descriptorArrays.length;
+    return avg;
 }
 
 async function extractAllDescriptors(inputElement) {
@@ -177,7 +210,7 @@ async function extractAllDescriptors(inputElement) {
         if (!loaded) return [];
     }
     const detections = await faceapi
-        .detectAllFaces(inputElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .detectAllFaces(inputElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptors();
     return detections;
@@ -228,15 +261,22 @@ function closeCamera(videoId) {
 // TEACHER DASHBOARD — FACE REGISTRATION DURING STUDENT ENROLLMENT
 // ══════════════════════════════════════════════════════════════════
 
-let capturedFaceDescriptor = null; // Holds descriptor for student being registered
+let capturedFaceDescriptor = null; // Holds final averaged descriptor
+let capturedFaceDescriptors = []; // Holds individual captures for multi-sample
+const REQUIRED_CAPTURES = 3;
 
 async function startFaceCapture() {
+    capturedFaceDescriptors = [];
+    capturedFaceDescriptor = null;
+    const loaded = await loadFaceModels();
+    if (!loaded) return;
     const ok = await openCamera('regStudentVideo');
     if (ok) {
         document.getElementById('startFaceCamBtn').style.display = 'none';
         document.getElementById('captureFaceBtn').style.display = 'inline-flex';
         document.getElementById('stopFaceCamBtn').style.display = 'inline-flex';
-        document.getElementById('faceCaptureStatus').textContent = 'Camera active. Position the student\'s face and click Capture.';
+        document.getElementById('faceCaptureStatus').innerHTML = `Camera active. Capture <strong>${REQUIRED_CAPTURES}</strong> samples — click Capture and slightly change angle each time. <strong>(0/${REQUIRED_CAPTURES})</strong>`;
+        document.getElementById('faceCaptureStatus').style.color = 'var(--text-secondary)';
         const canvas = document.getElementById('regFaceCanvas');
         if (canvas) canvas.style.display = 'none';
     }
@@ -245,17 +285,28 @@ async function startFaceCapture() {
 async function captureFace() {
     const video = document.getElementById('regStudentVideo');
     const statusEl = document.getElementById('faceCaptureStatus');
-    statusEl.textContent = '🔄 Analyzing face...';
+    statusEl.innerHTML = '🔄 Analyzing face...';
     statusEl.style.color = 'var(--warning)';
 
     const descriptor = await extractDescriptor(video);
     if (!descriptor) {
-        statusEl.textContent = '❌ No face detected. Please try again.';
+        statusEl.innerHTML = `❌ No face detected — try again. <strong>(${capturedFaceDescriptors.length}/${REQUIRED_CAPTURES})</strong>`;
         statusEl.style.color = 'var(--danger)';
         return;
     }
 
-    capturedFaceDescriptor = descriptor;
+    capturedFaceDescriptors.push(descriptor);
+    const count = capturedFaceDescriptors.length;
+
+    if (count < REQUIRED_CAPTURES) {
+        statusEl.innerHTML = `✅ Capture ${count}/${REQUIRED_CAPTURES} done! Slightly change angle and capture again.`;
+        statusEl.style.color = 'var(--success)';
+        showNotification(`📸 Face sample ${count}/${REQUIRED_CAPTURES} captured. Change angle slightly.`);
+        return;
+    }
+
+    // All captures done — compute averaged descriptor
+    capturedFaceDescriptor = averageDescriptors(capturedFaceDescriptors);
 
     // Draw snapshot on canvas
     const canvas = document.getElementById('regFaceCanvas');
@@ -270,12 +321,15 @@ async function captureFace() {
     document.getElementById('startFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('startFaceCamBtn').textContent = '🔄 Recapture';
 
-    statusEl.textContent = '✅ Face captured successfully!';
+    statusEl.innerHTML = `✅ All ${REQUIRED_CAPTURES} samples captured & averaged! Face ready.`;
     statusEl.style.color = 'var(--success)';
+    showNotification(`✅ ${REQUIRED_CAPTURES} face samples captured and averaged for robust recognition!`);
 }
 
 function stopFaceCapture() {
     closeCamera('regStudentVideo');
+    capturedFaceDescriptors = [];
+    capturedFaceDescriptor = null;
     document.getElementById('startFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('startFaceCamBtn').textContent = '📷 Start Camera';
     document.getElementById('captureFaceBtn').style.display = 'none';
@@ -290,14 +344,20 @@ function stopFaceCapture() {
 // ══════════════════════════════════════════════════════════════════
 
 let adminCapturedFaceDescriptor = null;
+let adminCapturedFaceDescriptors = [];
 
 async function startAdminFaceCapture() {
+    adminCapturedFaceDescriptors = [];
+    adminCapturedFaceDescriptor = null;
+    const loaded = await loadFaceModels();
+    if (!loaded) return;
     const ok = await openCamera('adminRegStudentVideo');
     if (ok) {
         document.getElementById('adminStartFaceCamBtn').style.display = 'none';
         document.getElementById('adminCaptureFaceBtn').style.display = 'inline-flex';
         document.getElementById('adminStopFaceCamBtn').style.display = 'inline-flex';
-        document.getElementById('adminFaceCaptureStatus').textContent = 'Camera active. Position the student\'s face and click Capture.';
+        document.getElementById('adminFaceCaptureStatus').innerHTML = `Camera active. Capture <strong>${REQUIRED_CAPTURES}</strong> samples — slightly change angle each time. <strong>(0/${REQUIRED_CAPTURES})</strong>`;
+        document.getElementById('adminFaceCaptureStatus').style.color = 'var(--text-secondary)';
         const canvas = document.getElementById('adminRegFaceCanvas');
         if (canvas) canvas.style.display = 'none';
     }
@@ -306,17 +366,28 @@ async function startAdminFaceCapture() {
 async function captureAdminFace() {
     const video = document.getElementById('adminRegStudentVideo');
     const statusEl = document.getElementById('adminFaceCaptureStatus');
-    statusEl.textContent = '🔄 Analyzing face...';
+    statusEl.innerHTML = '🔄 Analyzing face...';
     statusEl.style.color = 'var(--warning)';
 
     const descriptor = await extractDescriptor(video);
     if (!descriptor) {
-        statusEl.textContent = '❌ No face detected. Please try again.';
+        statusEl.innerHTML = `❌ No face detected — try again. <strong>(${adminCapturedFaceDescriptors.length}/${REQUIRED_CAPTURES})</strong>`;
         statusEl.style.color = 'var(--danger)';
         return;
     }
 
-    adminCapturedFaceDescriptor = descriptor;
+    adminCapturedFaceDescriptors.push(descriptor);
+    const count = adminCapturedFaceDescriptors.length;
+
+    if (count < REQUIRED_CAPTURES) {
+        statusEl.innerHTML = `✅ Capture ${count}/${REQUIRED_CAPTURES} done! Slightly change angle and capture again.`;
+        statusEl.style.color = 'var(--success)';
+        showNotification(`📸 Face sample ${count}/${REQUIRED_CAPTURES} captured.`);
+        return;
+    }
+
+    // All captures done — compute averaged descriptor
+    adminCapturedFaceDescriptor = averageDescriptors(adminCapturedFaceDescriptors);
 
     const canvas = document.getElementById('adminRegFaceCanvas');
     canvas.width = video.videoWidth;
@@ -330,12 +401,15 @@ async function captureAdminFace() {
     document.getElementById('adminStartFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('adminStartFaceCamBtn').textContent = '🔄 Recapture';
 
-    statusEl.textContent = '✅ Face captured successfully!';
+    statusEl.innerHTML = `✅ All ${REQUIRED_CAPTURES} samples captured & averaged! Face ready.`;
     statusEl.style.color = 'var(--success)';
+    showNotification(`✅ ${REQUIRED_CAPTURES} face samples captured and averaged!`);
 }
 
 function stopAdminFaceCapture() {
     closeCamera('adminRegStudentVideo');
+    adminCapturedFaceDescriptors = [];
+    adminCapturedFaceDescriptor = null;
     document.getElementById('adminStartFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('adminStartFaceCamBtn').textContent = '📷 Start Camera';
     document.getElementById('adminCaptureFaceBtn').style.display = 'none';
@@ -412,14 +486,18 @@ async function handleRegisterStudent(e) {
         if (data.success) {
             showNotification(data.message);
 
-            // Save face descriptor
+            // Save face descriptors (all samples + averaged)
             await api.post('/api/face-data', {
                 student_email: d.email,
-                descriptor: capturedFaceDescriptor
+                descriptors: capturedFaceDescriptors.length > 0
+                    ? [...capturedFaceDescriptors, capturedFaceDescriptor]
+                    : [capturedFaceDescriptor],
+                replace: true
             });
             showNotification('Face data saved!');
 
             capturedFaceDescriptor = null;
+            capturedFaceDescriptors = [];
             e.target.reset();
             stopFaceCapture();
             if (typeof fetchTeacherStudents === 'function') fetchTeacherStudents();
@@ -453,11 +531,15 @@ async function handleAdminRegisterStudent(e) {
 
             await api.post('/api/face-data', {
                 student_email: d.email,
-                descriptor: adminCapturedFaceDescriptor
+                descriptors: adminCapturedFaceDescriptors.length > 0
+                    ? [...adminCapturedFaceDescriptors, adminCapturedFaceDescriptor]
+                    : [adminCapturedFaceDescriptor],
+                replace: true
             });
             showNotification('Face data saved!');
 
             adminCapturedFaceDescriptor = null;
+            adminCapturedFaceDescriptors = [];
             e.target.reset();
             stopAdminFaceCapture();
             fetchAdminUsers();
@@ -621,19 +703,19 @@ async function recognizeFacesFromElement(element, returnOnly = false) {
             return returnOnly ? [] : undefined;
         }
 
-        // Build labeled face descriptors
+        // Build labeled face descriptors (use multiple descriptors per student for better accuracy)
         const labeledDescriptors = faceDataResp.face_data.map(fd => {
-            return new faceapi.LabeledFaceDescriptors(
-                fd.student_email,
-                [new Float32Array(fd.descriptor)]
-            );
+            const descs = (fd.descriptors && fd.descriptors.length)
+                ? fd.descriptors.map(d => new Float32Array(d))
+                : [new Float32Array(fd.descriptor)];
+            return new faceapi.LabeledFaceDescriptors(fd.student_email, descs);
         });
 
-        const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+        const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.55);
 
         // Detect all faces in the image/canvas
         const detections = await faceapi
-            .detectAllFaces(element, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+            .detectAllFaces(element, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
             .withFaceLandmarks()
             .withFaceDescriptors();
 
@@ -772,7 +854,7 @@ async function saveRecognizedAttendance() {
                 'Name': recognizedStudents[i].name,
                 'Roll Number': recognizedStudents[i].roll,
                 'Email': recognizedStudents[i].email,
-                'Year': recognizedStudents[i].year || 'N/A',
+                'Year': recognizedStudents[i].year,
                 'Subject': subject,
                 'Status': 'Present',
                 'Date': new Date().toLocaleDateString(),
@@ -813,21 +895,94 @@ function generateExcel(rows, filename, registerRows) {
     }
     const wb = XLSX.utils.book_new();
 
+    // Helper: auto-calculate column widths from data
+    function autoWidth(ws, data) {
+        if (!data.length) return;
+        const keys = Object.keys(data[0]);
+        const cols = keys.map((key) => {
+            let maxLen = key.length;
+            data.forEach(row => {
+                const val = String(row[key] ?? '');
+                if (val.length > maxLen) maxLen = val.length;
+            });
+            return { wch: Math.min(maxLen + 3, 35) };
+        });
+        ws['!cols'] = cols;
+    }
+
+    // Helper: style header row (bold, dark background, white text)
+    function styleHeaders(ws) {
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let c = range.s.c; c <= range.e.c; c++) {
+            const addr = XLSX.utils.encode_cell({ r: 0, c });
+            if (!ws[addr]) continue;
+            ws[addr].s = {
+                font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+                fill: { fgColor: { rgb: '4F46E5' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+                border: {
+                    bottom: { style: 'thin', color: { rgb: '000000' } }
+                }
+            };
+        }
+    }
+
     // Sheet 1: Detailed
     const ws1 = XLSX.utils.json_to_sheet(rows);
-    ws1['!cols'] = [
-        {wch: 20}, {wch: 15}, {wch: 25}, {wch: 25}, {wch: 8}, {wch: 12}, {wch: 10}
-    ];
+    autoWidth(ws1, rows);
+    styleHeaders(ws1);
+    ws1['!freeze'] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, ws1, 'Detailed');
 
     // Sheet 2: Register (if provided)
     if (registerRows && registerRows.length) {
         const ws2 = XLSX.utils.json_to_sheet(registerRows);
+        autoWidth(ws2, registerRows);
+        styleHeaders(ws2);
+        ws2['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+        // Color-code the Percentage column
+        const keys = Object.keys(registerRows[0]);
+        const pctColIdx = keys.indexOf('Percentage');
+        if (pctColIdx !== -1) {
+            for (let r = 1; r <= registerRows.length; r++) {
+                const addr = XLSX.utils.encode_cell({ r, c: pctColIdx });
+                if (!ws2[addr]) continue;
+                const val = parseFloat(String(ws2[addr].v).replace('%', '').replace('(avg)', '').trim());
+                let bgColor = 'FFFFFF';
+                if (!isNaN(val)) {
+                    if (val >= 75) bgColor = 'C6EFCE';        // green
+                    else if (val >= 60) bgColor = 'FFEB9C';   // yellow
+                    else bgColor = 'FFC7CE';                   // red
+                }
+                ws2[addr].s = {
+                    fill: { fgColor: { rgb: bgColor } },
+                    font: { bold: val >= 75 || isNaN(val), sz: 11 },
+                    alignment: { horizontal: 'center' }
+                };
+            }
+        }
+
+        // Bold the last row (summary)
+        if (registerRows.length > 1) {
+            const lastRow = registerRows.length;
+            for (let c = 0; c < keys.length; c++) {
+                const addr = XLSX.utils.encode_cell({ r: lastRow, c });
+                if (!ws2[addr]) continue;
+                ws2[addr].s = {
+                    ...(ws2[addr].s || {}),
+                    font: { bold: true, sz: 11 },
+                    fill: { fgColor: { rgb: 'E2E8F0' } }
+                };
+            }
+        }
+
         XLSX.utils.book_append_sheet(wb, ws2, 'Register');
     }
 
     XLSX.writeFile(wb, filename);
 }
+
 
 // ── Student List (Teacher) ──────────────────────────────────────
 let teacherStudentList = [];
@@ -919,6 +1074,51 @@ async function handleAdminAssignSubject(e) {
     } catch (err) { showNotification('Error.', true); }
 }
 
+// ── Clear Attendance ────────────────────────────────────────────
+async function handleClearAttendance(clearAll = false) {
+    const subject = document.getElementById('clearAttendanceSubject')?.value || 'all';
+    const date = document.getElementById('clearAttendanceDate')?.value || '';
+    const resultEl = document.getElementById('clearAttendanceResult');
+
+    let confirmMsg;
+    if (clearAll) {
+        confirmMsg = '⚠️ This will permanently delete ALL attendance records for every subject and every date. Are you absolutely sure?';
+    } else if (subject !== 'all' && date) {
+        confirmMsg = `Delete attendance for "${subject}" on ${date}?`;
+    } else if (subject !== 'all') {
+        confirmMsg = `Delete ALL attendance records for "${subject}"?`;
+    } else if (date) {
+        confirmMsg = `Delete ALL attendance records on ${date}?`;
+    } else {
+        confirmMsg = 'Delete ALL attendance records (no filters set)?';
+        clearAll = true;
+    }
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const body = clearAll ? { all: true } : {};
+        if (!clearAll) {
+            if (subject && subject !== 'all') body.subject = subject;
+            if (date) body.date = date;
+        }
+
+        const data = await api.post('/api/attendance/clear', body);
+        if (data.success) {
+            showNotification(data.message);
+            if (resultEl) {
+                resultEl.innerHTML = `<span style="color: var(--success);">✅ ${data.message}</span>`;
+                setTimeout(() => resultEl.textContent = '', 5000);
+            }
+        } else {
+            showNotification(data.message, true);
+            if (resultEl) resultEl.innerHTML = `<span style="color: var(--danger);">❌ ${data.message}</span>`;
+        }
+    } catch (err) {
+        showNotification('Error clearing attendance.', true);
+    }
+}
+
 async function handleAdminDeleteUser(id, name) {
     if (!confirm(`Delete ${name}?`)) return;
     try {
@@ -947,7 +1147,7 @@ async function fetchSubjects() {
 }
 
 function populateSubjectDropdowns() {
-    const ids = ['adminTeacherSubject', 'assignSubjectSelect', 'adminStudentCourse', 'subjectSelect', 'filterStudentCourse', 'newStudentCourse'];
+    const ids = ['adminTeacherSubject', 'assignSubjectSelect', 'adminStudentCourse', 'subjectSelect', 'filterStudentCourse', 'newStudentCourse', 'clearAttendanceSubject'];
     const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
 
     ids.forEach(id => {
@@ -962,8 +1162,8 @@ function populateSubjectDropdowns() {
 
         list.sort((a, b) => (a.year || 9) - (b.year || 9) || a.name.localeCompare(b.name));
         const val = el.value;
-        const def = (id === 'adminStudentCourse' || id === 'newStudentCourse') ? '-- Select Course --' : (id === 'filterStudentCourse' ? 'All Courses' : '-- Select Subject --');
-        el.innerHTML = `<option value="${id === 'filterStudentCourse' ? 'all' : ''}">${def}</option>` +
+        const def = (id === 'adminStudentCourse' || id === 'newStudentCourse') ? '-- Select Course --' : (id === 'filterStudentCourse' || id === 'clearAttendanceSubject') ? 'All Subjects' : '-- Select Subject --';
+        el.innerHTML = `<option value="${(id === 'filterStudentCourse' || id === 'clearAttendanceSubject') ? 'all' : ''}">${def}</option>` +
             list.map(s => `<option value="${s.name} (${s.code})">${s.name} (${s.code})${s.year && s.year !== 'Other' ? (isNaN(s.year) ? ' - ' + s.year : ' - Year ' + s.year) : ''}</option>`).join('');
         if (val) el.value = val;
     });
