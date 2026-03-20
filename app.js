@@ -225,11 +225,13 @@ async function openCamera(videoId, facingMode) {
         const constraints = {
             video: facingMode
                 ? { facingMode: { ideal: facingMode }, width: 640, height: 480 }
-                : { width: 640, height: 480 }
+                : { facingMode: { ideal: 'environment' }, width: 640, height: 480 }
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         video.style.display = 'block';
+        // Un-mirror: ensure video is never mirrored (browsers mirror front camera by default)
+        video.style.transform = 'none';
         currentStream = stream;
         return true;
     } catch (err) {
@@ -240,11 +242,30 @@ async function openCamera(videoId, facingMode) {
 
 let cameraFacing = 'environment'; // default: back camera
 
+// Generic flip for group attendance camera
 async function flipCamera() {
     cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
     closeCamera('teacherVideo');
     const ok = await openCamera('teacherVideo', cameraFacing);
     if (ok) showNotification(`📷 Switched to ${cameraFacing === 'user' ? 'front' : 'back'} camera`);
+}
+
+// Flip for teacher registration camera
+let regCameraFacing = 'environment';
+async function flipRegCamera() {
+    regCameraFacing = regCameraFacing === 'environment' ? 'user' : 'environment';
+    closeCamera('regStudentVideo');
+    const ok = await openCamera('regStudentVideo', regCameraFacing);
+    if (ok) showNotification(`📷 Switched to ${regCameraFacing === 'user' ? 'front' : 'back'} camera`);
+}
+
+// Flip for admin registration camera
+let adminRegCameraFacing = 'environment';
+async function flipAdminRegCamera() {
+    adminRegCameraFacing = adminRegCameraFacing === 'environment' ? 'user' : 'environment';
+    closeCamera('adminRegStudentVideo');
+    const ok = await openCamera('adminRegStudentVideo', adminRegCameraFacing);
+    if (ok) showNotification(`📷 Switched to ${adminRegCameraFacing === 'user' ? 'front' : 'back'} camera`);
 }
 
 function closeCamera(videoId) {
@@ -268,11 +289,14 @@ const REQUIRED_CAPTURES = 3;
 async function startFaceCapture() {
     capturedFaceDescriptors = [];
     capturedFaceDescriptor = null;
+    regCameraFacing = 'environment';
     const loaded = await loadFaceModels();
     if (!loaded) return;
-    const ok = await openCamera('regStudentVideo');
+    const ok = await openCamera('regStudentVideo', regCameraFacing);
     if (ok) {
         document.getElementById('startFaceCamBtn').style.display = 'none';
+        const flipBtn = document.getElementById('flipRegCamBtn');
+        if (flipBtn) flipBtn.style.display = 'inline-flex';
         document.getElementById('captureFaceBtn').style.display = 'inline-flex';
         document.getElementById('stopFaceCamBtn').style.display = 'inline-flex';
         document.getElementById('faceCaptureStatus').innerHTML = `Camera active. Capture <strong>${REQUIRED_CAPTURES}</strong> samples — click Capture and slightly change angle each time. <strong>(0/${REQUIRED_CAPTURES})</strong>`;
@@ -318,6 +342,8 @@ async function captureFace() {
     closeCamera('regStudentVideo');
     document.getElementById('captureFaceBtn').style.display = 'none';
     document.getElementById('stopFaceCamBtn').style.display = 'none';
+    const flipBtnReg = document.getElementById('flipRegCamBtn');
+    if (flipBtnReg) flipBtnReg.style.display = 'none';
     document.getElementById('startFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('startFaceCamBtn').textContent = '🔄 Recapture';
 
@@ -332,6 +358,8 @@ function stopFaceCapture() {
     capturedFaceDescriptor = null;
     document.getElementById('startFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('startFaceCamBtn').textContent = '📷 Start Camera';
+    const flipBtn = document.getElementById('flipRegCamBtn');
+    if (flipBtn) flipBtn.style.display = 'none';
     document.getElementById('captureFaceBtn').style.display = 'none';
     document.getElementById('stopFaceCamBtn').style.display = 'none';
     document.getElementById('faceCaptureStatus').textContent = '';
@@ -349,11 +377,14 @@ let adminCapturedFaceDescriptors = [];
 async function startAdminFaceCapture() {
     adminCapturedFaceDescriptors = [];
     adminCapturedFaceDescriptor = null;
+    adminRegCameraFacing = 'environment';
     const loaded = await loadFaceModels();
     if (!loaded) return;
-    const ok = await openCamera('adminRegStudentVideo');
+    const ok = await openCamera('adminRegStudentVideo', adminRegCameraFacing);
     if (ok) {
         document.getElementById('adminStartFaceCamBtn').style.display = 'none';
+        const flipBtn = document.getElementById('adminFlipRegCamBtn');
+        if (flipBtn) flipBtn.style.display = 'inline-flex';
         document.getElementById('adminCaptureFaceBtn').style.display = 'inline-flex';
         document.getElementById('adminStopFaceCamBtn').style.display = 'inline-flex';
         document.getElementById('adminFaceCaptureStatus').innerHTML = `Camera active. Capture <strong>${REQUIRED_CAPTURES}</strong> samples — slightly change angle each time. <strong>(0/${REQUIRED_CAPTURES})</strong>`;
@@ -398,6 +429,8 @@ async function captureAdminFace() {
     closeCamera('adminRegStudentVideo');
     document.getElementById('adminCaptureFaceBtn').style.display = 'none';
     document.getElementById('adminStopFaceCamBtn').style.display = 'none';
+    const flipBtnAdmin = document.getElementById('adminFlipRegCamBtn');
+    if (flipBtnAdmin) flipBtnAdmin.style.display = 'none';
     document.getElementById('adminStartFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('adminStartFaceCamBtn').textContent = '🔄 Recapture';
 
@@ -412,6 +445,8 @@ function stopAdminFaceCapture() {
     adminCapturedFaceDescriptor = null;
     document.getElementById('adminStartFaceCamBtn').style.display = 'inline-flex';
     document.getElementById('adminStartFaceCamBtn').textContent = '📷 Start Camera';
+    const flipBtn = document.getElementById('adminFlipRegCamBtn');
+    if (flipBtn) flipBtn.style.display = 'none';
     document.getElementById('adminCaptureFaceBtn').style.display = 'none';
     document.getElementById('adminStopFaceCamBtn').style.display = 'none';
     document.getElementById('adminFaceCaptureStatus').textContent = '';
@@ -1097,13 +1132,16 @@ async function handleClearAttendance(clearAll = false) {
     if (!confirm(confirmMsg)) return;
 
     try {
-        const body = clearAll ? { all: true } : {};
-        if (!clearAll) {
-            if (subject && subject !== 'all') body.subject = subject;
-            if (date) body.date = date;
+        // Build query string for DELETE request to /api/attendance
+        const params = new URLSearchParams();
+        if (clearAll) {
+            params.set('all', 'true');
+        } else {
+            if (subject && subject !== 'all') params.set('subject', subject);
+            if (date) params.set('date', date);
         }
 
-        const data = await api.post('/api/attendance/clear', body);
+        const data = await api.del(`/api/attendance?${params.toString()}`);
         if (data.success) {
             showNotification(data.message);
             if (resultEl) {
