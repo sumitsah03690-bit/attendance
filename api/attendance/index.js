@@ -109,8 +109,10 @@ module.exports = async function handler(req, res) {
   const { student_email, subject, status, records } = req.body || {};
 
   const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().split(' ')[0];
+  // Convert to IST (UTC+5:30) — Vercel servers run in UTC
+  const istOptions = { timeZone: 'Asia/Kolkata' };
+  const date = now.toLocaleDateString('en-CA', istOptions); // en-CA gives YYYY-MM-DD format
+  const time = now.toLocaleTimeString('en-GB', istOptions); // en-GB gives HH:MM:SS 24hr format
 
   try {
     // Bulk attendance: if 'records' array is provided
