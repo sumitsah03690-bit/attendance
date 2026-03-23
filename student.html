@@ -11,6 +11,182 @@
     <link rel="apple-touch-icon" href="/img/icon-192.png">
     <title>Student Dashboard - Face Recognition Attendance System</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Subject Cards */
+        .subject-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+        .subject-card:hover { border-color: var(--primary); }
+        .subject-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .subject-header h3 {
+            font-size: 1.05rem;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .subject-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .subject-pct {
+            font-size: 1.3rem;
+            font-weight: 700;
+            min-width: 55px;
+            text-align: right;
+        }
+        .pct-green { color: var(--success); }
+        .pct-yellow { color: var(--warning); }
+        .pct-red { color: var(--danger); }
+        .stat-mini {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+        .expand-icon {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+            color: var(--text-secondary);
+        }
+        .expand-icon.open { transform: rotate(180deg); }
+
+        /* Date list inside subject card */
+        .date-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+        .date-list.open { max-height: 2000px; }
+        .date-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+        .date-row:last-child { border-bottom: none; }
+        .date-row .date-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .dispute-btn {
+            background: none;
+            border: 1px solid var(--warning);
+            color: var(--warning);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.2s;
+        }
+        .dispute-btn:hover {
+            background: var(--warning);
+            color: #000;
+        }
+
+        /* Dispute modal */
+        .dispute-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .dispute-modal-overlay.active { display: flex; }
+        .dispute-modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            width: 90%;
+            max-width: 440px;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .dispute-modal h3 { margin: 0 0 6px 0; font-size: 1.1rem; }
+        .dispute-modal .sub-label { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; }
+        .dispute-modal textarea {
+            width: 100%;
+            min-height: 90px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            resize: vertical;
+            margin-bottom: 16px;
+            font-family: inherit;
+        }
+        .dispute-modal .modal-btns {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        /* Dispute list */
+        .dispute-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        .dispute-item .dispute-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .badge-pending {
+            background: rgba(245,158,11,0.15);
+            color: var(--warning);
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-resolved {
+            background: rgba(34,197,94,0.15);
+            color: var(--success);
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Progress bar */
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+    </style>
 </head>
 
 <body>
@@ -37,7 +213,7 @@
                 <div class="stat-card">
                     <h3>Total Classes</h3>
                     <div id="totalClassesValue" class="value">0</div>
-                    <div class="percentage">Present & Absent</div>
+                    <div id="totalPresentValue" class="percentage">0 Present</div>
                 </div>
                 <div class="stat-card">
                     <h3>Enrolled Subjects</h3>
@@ -47,37 +223,47 @@
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-                <!-- Attendance Detailed Table -->
-                <div class="card">
-                    <h2><span style="font-size: 1.5rem;">📊</span> Attendance History</h2>
-                    <div class="table-responsive" style="margin-top: 10px;">
-                        <table style="width: 100%; text-align: left;">
-                            <thead>
-                                <tr>
-                                    <th>Subject</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody id="studentAttendanceBody">
-                                <!-- Attendance rows populated here -->
-                            </tbody>
-                        </table>
-                    </div>
+            <!-- Subject-wise Attendance Cards -->
+            <div class="card">
+                <h2><span style="font-size: 1.5rem;">📚</span> Subject-wise Attendance</h2>
+                <div id="subjectCardsContainer" style="margin-top: 16px;">
+                    <div style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading attendance data...</div>
                 </div>
+            </div>
 
-                <!-- Recent Records Side Panel -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <!-- Recent Activity -->
                 <div class="card">
                     <h2><span style="font-size: 1.5rem;">🕒</span> Recent Activity</h2>
                     <div id="studentRecentRecords" style="margin-top: 10px;">
                         <!-- Recent records populated here -->
                     </div>
                 </div>
+
+                <!-- My Disputes -->
+                <div class="card">
+                    <h2><span style="font-size: 1.5rem;">📩</span> My Disputes</h2>
+                    <div id="studentDisputesList" style="margin-top: 10px;">
+                        <div style="padding: 15px; text-align: center; color: var(--text-secondary);">No disputes raised yet.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Dispute Modal -->
+    <div class="dispute-modal-overlay" id="disputeModalOverlay">
+        <div class="dispute-modal">
+            <h3>⚠️ Raise Attendance Dispute</h3>
+            <div class="sub-label" id="disputeModalInfo">Subject — Date</div>
+            <textarea id="disputeMessage" placeholder="Explain why you believe you were present (e.g., I was sitting in the back row, the photo may have missed me)..."></textarea>
+            <div class="modal-btns">
+                <button class="btn btn-secondary" onclick="closeDisputeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitDispute()" id="submitDisputeBtn">Send to Teacher</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
     <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
 </body>

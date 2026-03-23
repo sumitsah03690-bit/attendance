@@ -1234,6 +1234,8 @@ function renderAdminUsers() {
 }
 
 // ── Student Dashboard ───────────────────────────────────────────
+let studentDisputeData = {}; // temp: holds subject+date for the dispute modal
+
 function initStudentDashboard(u) {
     const el = document.getElementById('studentNameDisplay');
     if (el) el.textContent = u.name || 'Student';
@@ -1247,71 +1249,215 @@ function initStudentDashboard(u) {
         }
     }
 
-    // Fetch and display attendance
     const email = u.email;
     if (!email) return;
 
+    // Fetch attendance records
     api.get(`/api/attendance/${email}`).then(data => {
-        if (data.success) {
-            const records = data.attendance || [];
-            const tbody = document.getElementById('studentAttendanceBody');
-            const recent = document.getElementById('studentRecentRecords');
-            const overall = document.getElementById('overallAttendanceValue');
-            const count = document.getElementById('totalClassesValue');
-            const target = document.getElementById('attendanceTargetStatus');
+        if (!data.success) return;
+        const records = data.attendance || [];
 
-            if (records.length === 0) {
-                if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-secondary); padding:20px;">No attendance records yet.</td></tr>';
-                if (recent) recent.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">No recent records found.</div>';
-                if (overall) overall.textContent = '0%';
-                if (count) count.textContent = '0';
-                if (target) target.textContent = 'No data';
-                return;
-            }
+        const overall = document.getElementById('overallAttendanceValue');
+        const count = document.getElementById('totalClassesValue');
+        const presentVal = document.getElementById('totalPresentValue');
+        const target = document.getElementById('attendanceTargetStatus');
+        const cardsContainer = document.getElementById('subjectCardsContainer');
+        const recent = document.getElementById('studentRecentRecords');
 
-            // Create subject-wise stats for better visualization if needed, but for now just fix table
-            if (tbody) tbody.innerHTML = records.map(r => `
-                <tr class="attendance-row">
-                    <td><div style="font-weight:600;">${r.subject}</div></td>
-                    <td><span class="badge ${r.status.toLowerCase() === 'present' ? 'badge-success' : 'badge-danger'}">${r.status.toUpperCase()}</span></td>
-                    <td>${r.date}</td>
-                    <td><span style="color:var(--text-secondary); font-size:0.9rem;">${r.time}</span></td>
-                </tr>
-            `).join('');
+        if (records.length === 0) {
+            if (cardsContainer) cardsContainer.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary);">No attendance records yet. Your records will appear here once your teacher takes attendance.</div>';
+            if (recent) recent.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">No recent records found.</div>';
+            if (overall) overall.textContent = '0%';
+            if (count) count.textContent = '0';
+            if (presentVal) presentVal.textContent = '0 Present';
+            if (target) { target.textContent = 'No data'; target.style.color = 'var(--text-secondary)'; }
+            return;
+        }
 
-            if (recent) recent.innerHTML = records.slice(0, 5).map(r => `
-                <div class="recent-record-item" style="padding: 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        // ── Overall stats ──
+        const totalPresent = records.filter(r => r.status.toLowerCase() === 'present').length;
+        const overallPct = Math.round((totalPresent / records.length) * 100);
+        if (overall) overall.textContent = `${overallPct}%`;
+        if (count) count.textContent = records.length;
+        if (presentVal) presentVal.textContent = `${totalPresent} Present`;
+        if (target) {
+            if (overallPct >= 75) { target.textContent = 'Above target ✅'; target.style.color = 'var(--success)'; }
+            else if (overallPct >= 60) { target.textContent = 'Near target ⚠️'; target.style.color = 'var(--warning)'; }
+            else { target.textContent = 'Below target ❌'; target.style.color = 'var(--danger)'; }
+        }
+
+        // ── Group by subject ──
+        const subjectMap = {};
+        records.forEach(r => {
+            if (!subjectMap[r.subject]) subjectMap[r.subject] = [];
+            subjectMap[r.subject].push(r);
+        });
+
+        // ── Render subject cards ──
+        if (cardsContainer) {
+            cardsContainer.innerHTML = Object.keys(subjectMap).map((subject, idx) => {
+                const subRecords = subjectMap[subject];
+                const present = subRecords.filter(r => r.status.toLowerCase() === 'present').length;
+                const total = subRecords.length;
+                const pct = Math.round((present / total) * 100);
+                const pctClass = pct >= 75 ? 'pct-green' : pct >= 60 ? 'pct-yellow' : 'pct-red';
+                const barColor = pct >= 75 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--danger)';
+
+                // Sort dates newest first
+                const sortedRecords = [...subRecords].sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+
+                const dateRows = sortedRecords.map(r => {
+                    const isPresent = r.status.toLowerCase() === 'present';
+                    return `
+                        <div class="date-row">
+                            <div class="date-info">
+                                <span>${isPresent ? '✅' : '❌'}</span>
+                                <span style="font-weight:500;">${r.date}</span>
+                                <span style="color:var(--text-secondary); font-size:0.8rem;">${r.time}</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span class="badge ${isPresent ? 'badge-success' : 'badge-danger'}" style="font-size:0.75rem;">${isPresent ? 'PRESENT' : 'ABSENT'}</span>
+                                ${!isPresent ? `<button class="dispute-btn" onclick="openDisputeModal('${subject.replace(/'/g, "\\'")}', '${r.date}')">🔔 Dispute</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="subject-card" id="subject-card-${idx}">
+                        <div class="subject-header" onclick="toggleSubjectCard(${idx})">
+                            <div>
+                                <h3>${subject}</h3>
+                                <div class="stat-mini">${present} present / ${total} classes</div>
+                            </div>
+                            <div class="subject-stats">
+                                <span class="subject-pct ${pctClass}">${pct}%</span>
+                                <span class="expand-icon" id="expand-icon-${idx}">▼</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width:${pct}%; background:${barColor};"></div>
+                        </div>
+                        <div class="date-list" id="date-list-${idx}">
+                            <div style="padding-top:12px;">
+                                ${dateRows}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ── Recent activity ──
+        if (recent) {
+            recent.innerHTML = records.slice(0, 6).map(r => `
+                <div style="padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <div style="font-weight:600; font-size:0.95rem;">${r.subject}</div>
+                        <div style="font-weight:600; font-size:0.9rem;">${r.subject}</div>
                         <div style="color:var(--text-secondary); font-size:0.8rem;">${r.date} at ${r.time}</div>
                     </div>
                     <span class="badge ${r.status.toLowerCase() === 'present' ? 'badge-success' : 'badge-danger'}" style="font-size:0.75rem;">${r.status.toUpperCase()}</span>
                 </div>
             `).join('');
-
-            if (count) count.textContent = records.length;
-            if (overall) {
-                const presentCount = records.filter(r => r.status.toLowerCase() === 'present').length;
-                const percentage = Math.round((presentCount / records.length) * 100);
-                overall.textContent = `${percentage}%`;
-                
-                if (target) {
-                    if (percentage >= 75) {
-                        target.textContent = 'Above target';
-                        target.style.color = 'var(--success)';
-                    } else if (percentage >= 60) {
-                        target.textContent = 'Near target';
-                        target.style.color = 'var(--warning)';
-                    } else {
-                        target.textContent = 'Below target';
-                        target.style.color = 'var(--danger)';
-                    }
-                }
-            }
         }
     }).catch(err => {
         console.error('Failed to fetch attendance:', err);
     });
+
+    // Fetch disputes
+    fetchStudentDisputes(u);
+}
+
+// ── Subject card expand/collapse ──
+function toggleSubjectCard(idx) {
+    const list = document.getElementById(`date-list-${idx}`);
+    const icon = document.getElementById(`expand-icon-${idx}`);
+    if (list) list.classList.toggle('open');
+    if (icon) icon.classList.toggle('open');
+}
+
+// ── Dispute Modal ──
+function openDisputeModal(subject, date) {
+    studentDisputeData = { subject, date };
+    const info = document.getElementById('disputeModalInfo');
+    if (info) info.textContent = `${subject} — ${date}`;
+    const msg = document.getElementById('disputeMessage');
+    if (msg) msg.value = '';
+    document.getElementById('disputeModalOverlay').classList.add('active');
+}
+
+function closeDisputeModal() {
+    document.getElementById('disputeModalOverlay').classList.remove('active');
+    studentDisputeData = {};
+}
+
+async function submitDispute() {
+    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const message = document.getElementById('disputeMessage').value.trim();
+    if (!message) return showNotification('Please enter a message explaining why you think you were present.', true);
+
+    const btn = document.getElementById('submitDisputeBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+    try {
+        const data = await fetch('/api/attendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'create',
+                student_email: user.email,
+                student_name: user.name || '',
+                subject: studentDisputeData.subject,
+                date: studentDisputeData.date,
+                message: message,
+                teacher_email: user.teacher_email || ''
+            })
+        }).then(r => r.json());
+
+        if (data.success) {
+            showNotification('✅ Dispute submitted! Your teacher will review it.');
+            closeDisputeModal();
+            fetchStudentDisputes(user);
+        } else {
+            showNotification(data.message || 'Failed to submit dispute.', true);
+        }
+    } catch (err) {
+        showNotification('Error submitting dispute.', true);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Send to Teacher'; }
+    }
+}
+
+// ── Fetch & Render Student Disputes ──
+async function fetchStudentDisputes(user) {
+    const container = document.getElementById('studentDisputesList');
+    if (!container) return;
+
+    try {
+        const data = await fetch('/api/attendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list', student_email: user.email })
+        }).then(r => r.json());
+
+        if (data.success && data.disputes && data.disputes.length > 0) {
+            container.innerHTML = data.disputes.map(d => `
+                <div class="dispute-item">
+                    <div class="dispute-head">
+                        <div style="font-weight:600; font-size:0.9rem;">${d.subject}</div>
+                        <span class="${d.status === 'pending' ? 'badge-pending' : 'badge-resolved'}">${d.status === 'pending' ? '⏳ Pending' : '✅ Resolved'}</span>
+                    </div>
+                    <div style="color:var(--text-secondary); font-size:0.82rem; margin-bottom:4px;">📅 ${d.date}</div>
+                    <div style="font-size:0.85rem; color:var(--text-primary); padding: 6px 10px; background:var(--bg-card); border-radius:8px; border:1px solid var(--border);">"${d.message}"</div>
+                    ${d.status === 'resolved' && d.resolved_note ? `<div style="font-size:0.82rem; color:var(--success); margin-top:6px;">Teacher: ${d.resolved_note}</div>` : ''}
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">No disputes raised yet. If you were marked absent by mistake, click the "Dispute" button next to the date.</div>';
+        }
+    } catch (err) {
+        console.error('Failed to fetch disputes:', err);
+    }
 }
 
 // ── Initialization ──────────────────────────────────────────────
@@ -1362,6 +1508,99 @@ function initTeacherDashboard(u) {
     if (document.getElementById('teacherStudentsBody')) fetchTeacherStudents();
     // Auto-load face models on teacher dashboard
     loadFaceModels();
+    // Load student disputes
+    fetchTeacherDisputes(u);
+}
+
+// ── Teacher Dispute Management ──
+async function fetchTeacherDisputes(user) {
+    const container = document.getElementById('teacherDisputesList');
+    const countEl = document.getElementById('pendingDisputeCount');
+    if (!container) return;
+
+    try {
+        const data = await fetch('/api/attendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list', teacher_email: user.email })
+        }).then(r => r.json());
+
+        if (data.success && data.disputes && data.disputes.length > 0) {
+            const pending = data.disputes.filter(d => d.status === 'pending');
+            const resolved = data.disputes.filter(d => d.status === 'resolved');
+            if (countEl) countEl.textContent = pending.length > 0 ? `${pending.length} pending` : 'All resolved ✅';
+
+            let html = '';
+            if (pending.length > 0) {
+                html += pending.map(d => `
+                    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div>
+                                <span style="font-weight:600; font-size:0.95rem;">${d.student_name || d.student_email}</span>
+                                <span style="color:var(--text-secondary); font-size:0.82rem; margin-left:8px;">${d.student_email}</span>
+                            </div>
+                            <span style="background:rgba(245,158,11,0.15); color:var(--warning); padding:3px 10px; border-radius:8px; font-size:0.75rem; font-weight:600;">⏳ Pending</span>
+                        </div>
+                        <div style="font-size:0.88rem; margin-bottom:4px;"><strong>${d.subject}</strong> — ${d.date}</div>
+                        <div style="font-size:0.85rem; color:var(--text-primary); padding:8px 12px; background:var(--bg-card); border-radius:8px; border:1px solid var(--border); margin-bottom:10px;">"${d.message}"</div>
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="resolveDispute('${d.id}', '')" class="btn btn-success" style="padding:6px 14px; font-size:0.82rem;">✅ Resolve</button>
+                            <button onclick="resolveDisputeWithNote('${d.id}')" class="btn btn-secondary" style="padding:6px 14px; font-size:0.82rem;">💬 Resolve with Note</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            if (resolved.length > 0) {
+                html += `<details style="margin-top:12px;"><summary style="cursor:pointer; color:var(--text-secondary); font-size:0.85rem; margin-bottom:8px;">Show ${resolved.length} resolved dispute(s)</summary>`;
+                html += resolved.map(d => `
+                    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:8px; opacity:0.7;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:600; font-size:0.88rem;">${d.student_name || d.student_email}</span>
+                            <span style="background:rgba(34,197,94,0.15); color:var(--success); padding:3px 10px; border-radius:8px; font-size:0.75rem; font-weight:600;">✅ Resolved</span>
+                        </div>
+                        <div style="font-size:0.85rem;">${d.subject} — ${d.date}</div>
+                        ${d.resolved_note ? `<div style="font-size:0.82rem; color:var(--success); margin-top:4px;">Your note: ${d.resolved_note}</div>` : ''}
+                    </div>
+                `).join('');
+                html += '</details>';
+            }
+
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary);">No student queries yet. When students raise disputes, they will appear here.</div>';
+            if (countEl) countEl.textContent = '';
+        }
+    } catch (err) {
+        console.error('Failed to fetch teacher disputes:', err);
+        container.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">Failed to load disputes.</div>';
+    }
+}
+
+async function resolveDispute(disputeId, note) {
+    try {
+        const data = await fetch('/api/attendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'resolve', dispute_id: disputeId, resolved_note: note })
+        }).then(r => r.json());
+
+        if (data.success) {
+            showNotification('✅ Dispute resolved!');
+            const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            fetchTeacherDisputes(user);
+        } else {
+            showNotification(data.message || 'Failed to resolve.', true);
+        }
+    } catch (err) {
+        showNotification('Error resolving dispute.', true);
+    }
+}
+
+function resolveDisputeWithNote(disputeId) {
+    const note = prompt('Add a note for the student (optional):');
+    if (note === null) return; // cancelled
+    resolveDispute(disputeId, note || '');
 }
 
 function initAdminDashboard(u) {

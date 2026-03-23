@@ -1,7 +1,74 @@
 const { getDb } = require('../../lib/db');
 
+const { ObjectId } = require('mongodb');
+
 module.exports = async function handler(req, res) {
   const db = await getDb();
+
+  // ── PUT: Dispute queries (create / list / resolve) ──
+  if (req.method === 'PUT') {
+    const { action } = req.body || {};
+
+    try {
+      // CREATE a new dispute
+      if (action === 'create') {
+        const { student_email, student_name, subject, date, message, teacher_email } = req.body;
+        if (!student_email || !subject || !date) {
+          return res.status(400).json({ success: false, message: 'Student email, subject and date are required.' });
+        }
+        await db.collection('disputes').insertOne({
+          student_email,
+          student_name: student_name || '',
+          subject,
+          date,
+          message: message || '',
+          teacher_email: teacher_email || '',
+          status: 'pending',
+          resolved_note: '',
+          created_at: new Date()
+        });
+        return res.json({ success: true, message: 'Dispute submitted! Your teacher will review it.' });
+      }
+
+      // LIST disputes (by student or teacher)
+      if (action === 'list') {
+        const { student_email, teacher_email } = req.body;
+        const filter = {};
+        if (student_email) filter.student_email = student_email;
+        if (teacher_email) filter.teacher_email = teacher_email;
+        const disputes = await db.collection('disputes').find(filter).sort({ created_at: -1 }).toArray();
+        const mapped = disputes.map(d => ({
+          id: d._id.toString(),
+          student_email: d.student_email,
+          student_name: d.student_name,
+          subject: d.subject,
+          date: d.date,
+          message: d.message,
+          status: d.status,
+          resolved_note: d.resolved_note || '',
+          created_at: d.created_at
+        }));
+        return res.json({ success: true, disputes: mapped });
+      }
+
+      // RESOLVE a dispute (teacher)
+      if (action === 'resolve') {
+        const { dispute_id, resolved_note } = req.body;
+        if (!dispute_id) return res.status(400).json({ success: false, message: 'Dispute ID required.' });
+        let oid;
+        try { oid = new ObjectId(dispute_id); } catch { return res.status(400).json({ success: false, message: 'Invalid dispute ID.' }); }
+        await db.collection('disputes').updateOne(
+          { _id: oid },
+          { $set: { status: 'resolved', resolved_note: resolved_note || '', resolved_at: new Date() } }
+        );
+        return res.json({ success: true, message: 'Dispute resolved!' });
+      }
+
+      return res.status(400).json({ success: false, message: 'Invalid action. Use create, list, or resolve.' });
+    } catch (e) {
+      return res.status(500).json({ success: false, message: e.message });
+    }
+  }
 
   // ── DELETE: Clear attendance records ──
   if (req.method === 'DELETE') {
