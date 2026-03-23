@@ -55,11 +55,7 @@
                     </div>
                 </div>
 
-                <!-- AI Status -->
-                <div id="aiStatus" class="ai-status-bar">
-                    <span>🤖 AI Engine: <strong id="aiStatusText">Not Loaded</strong></span>
-                    <button onclick="loadFaceModels()" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" id="loadModelsBtn">Load AI</button>
-                </div>
+
 
                 <!-- Camera Preview -->
                 <div class="camera-preview" style="position: relative;">
@@ -69,7 +65,7 @@
 
                 <!-- Camera Controls -->
                 <div class="camera-controls">
-                    <button onclick="startAttendanceCamera()" class="btn btn-success" id="startCamBtn">Start Camera</button>
+                    <button onclick="startAttendanceCamera(); loadFaceModels();" class="btn btn-success" id="startCamBtn">Start Camera</button>
                     <button onclick="flipCamera()" id="flipCamBtn" class="btn btn-secondary" style="display: none;">🔄 Flip Camera</button>
                     <button onclick="captureGroupPhoto()" id="captureBtn" class="btn btn-primary" style="display: none;">📷 Capture</button>
                     <button onclick="finishCameraCaptures()" id="doneCapturingBtn" class="btn btn-success" style="display: none;">✅ Done — Show Results</button>
