@@ -1,5 +1,8 @@
 node_modules/
 .env
+.env.*
 __pycache__/
 *.sqlite
 .vercel/
+img/README.md
+img/CONFIDENTIAL_TEAM_DOCS.md
