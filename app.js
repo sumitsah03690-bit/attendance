@@ -959,21 +959,41 @@ function generateExcel(rows, filename, registerRows) {
 
     // Sheet 2: Register (if provided)
     if (registerRows && registerRows.length) {
-        const ws2 = XLSX.utils.json_to_sheet(registerRows);
-        autoWidth(ws2, registerRows);
+        // Build as array-of-arrays to prevent date headers from being converted to Excel dates
+        const regKeys = Object.keys(registerRows[0]);
+        const headerRow = regKeys.map(k => String(k)); // force all headers to be strings
+        const aoa = [headerRow];
+        registerRows.forEach(row => {
+            aoa.push(regKeys.map(k => row[k]));
+        });
+        const ws2 = XLSX.utils.aoa_to_sheet(aoa);
+
+        // Auto-width
+        const cols = regKeys.map((key, i) => {
+            let maxLen = key.length;
+            aoa.forEach(r => {
+                const val = String(r[i] ?? '');
+                if (val.length > maxLen) maxLen = val.length;
+            });
+            return { wch: Math.min(maxLen + 3, 20) };
+        });
+        // First column (Student Name) wider
+        cols[0] = { wch: 25 };
+        ws2['!cols'] = cols;
+
         styleHeaders(ws2);
-        ws2['!freeze'] = { xSplit: 0, ySplit: 1 };
+        ws2['!freeze'] = { xSplit: 1, ySplit: 1 }; // freeze first col + first row
 
         // Bold the last row (TOTAL summary)
-        const keys = Object.keys(registerRows[0]);
-        if (registerRows.length > 1) {
-            const lastRow = registerRows.length;
-            for (let c = 0; c < keys.length; c++) {
+        if (aoa.length > 2) {
+            const lastRow = aoa.length - 1;
+            for (let c = 0; c < regKeys.length; c++) {
                 const addr = XLSX.utils.encode_cell({ r: lastRow, c });
                 if (!ws2[addr]) continue;
                 ws2[addr].s = {
                     font: { bold: true, sz: 11 },
-                    fill: { fgColor: { rgb: 'E2E8F0' } }
+                    fill: { fgColor: { rgb: 'E2E8F0' } },
+                    alignment: { horizontal: 'center' }
                 };
             }
         }
