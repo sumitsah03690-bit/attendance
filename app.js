@@ -56,32 +56,20 @@ async function downloadTeacherReport() {
             return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
         });
 
-        sortedStudents.forEach((student, idx) => {
-            const row = { 'S.No': idx + 1, 'Student Name': student.name, 'Roll Number': student.roll };
-            let totalPresent = 0;
+        sortedStudents.forEach((student) => {
+            const row = { 'Student Name': student.name };
             sortedDates.forEach(date => {
-                const val = student.dates[date] ? 1 : 0;
-                row[date] = val;
-                totalPresent += val;
+                row[date] = student.dates[date] ? 1 : 0;
             });
-            row['Total Present'] = totalPresent;
-            row['Total Classes'] = sortedDates.length;
-            row['Percentage'] = sortedDates.length > 0 ? ((totalPresent / sortedDates.length) * 100).toFixed(1) + '%' : '0%';
             registerRows.push(row);
         });
 
         // Add summary row at the bottom
         if (registerRows.length > 0) {
-            const summaryRow = { 'S.No': '', 'Student Name': 'SUMMARY', 'Roll Number': '' };
+            const summaryRow = { 'Student Name': 'TOTAL' };
             sortedDates.forEach(date => {
-                const col = registerRows.reduce((sum, r) => sum + (r[date] || 0), 0);
-                summaryRow[date] = col;
+                summaryRow[date] = registerRows.reduce((sum, r) => sum + (r[date] || 0), 0);
             });
-            const totalPresAll = registerRows.reduce((s, r) => s + r['Total Present'], 0);
-            const classesAll = registerRows.reduce((s, r) => s + r['Total Classes'], 0);
-            summaryRow['Total Present'] = totalPresAll;
-            summaryRow['Total Classes'] = classesAll;
-            summaryRow['Percentage'] = classesAll > 0 ? ((totalPresAll / classesAll) * 100).toFixed(1) + '% (avg)' : '0%';
             registerRows.push(summaryRow);
         }
 
@@ -976,36 +964,14 @@ function generateExcel(rows, filename, registerRows) {
         styleHeaders(ws2);
         ws2['!freeze'] = { xSplit: 0, ySplit: 1 };
 
-        // Color-code the Percentage column
+        // Bold the last row (TOTAL summary)
         const keys = Object.keys(registerRows[0]);
-        const pctColIdx = keys.indexOf('Percentage');
-        if (pctColIdx !== -1) {
-            for (let r = 1; r <= registerRows.length; r++) {
-                const addr = XLSX.utils.encode_cell({ r, c: pctColIdx });
-                if (!ws2[addr]) continue;
-                const val = parseFloat(String(ws2[addr].v).replace('%', '').replace('(avg)', '').trim());
-                let bgColor = 'FFFFFF';
-                if (!isNaN(val)) {
-                    if (val >= 75) bgColor = 'C6EFCE';        // green
-                    else if (val >= 60) bgColor = 'FFEB9C';   // yellow
-                    else bgColor = 'FFC7CE';                   // red
-                }
-                ws2[addr].s = {
-                    fill: { fgColor: { rgb: bgColor } },
-                    font: { bold: val >= 75 || isNaN(val), sz: 11 },
-                    alignment: { horizontal: 'center' }
-                };
-            }
-        }
-
-        // Bold the last row (summary)
         if (registerRows.length > 1) {
             const lastRow = registerRows.length;
             for (let c = 0; c < keys.length; c++) {
                 const addr = XLSX.utils.encode_cell({ r: lastRow, c });
                 if (!ws2[addr]) continue;
                 ws2[addr].s = {
-                    ...(ws2[addr].s || {}),
                     font: { bold: true, sz: 11 },
                     fill: { fgColor: { rgb: 'E2E8F0' } }
                 };
